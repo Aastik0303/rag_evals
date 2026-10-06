@@ -3,6 +3,8 @@ from dotenv import load_dotenv
 from deepeval.synthesizer import Synthesizer
 from langchain_text_splitters.character import RecursiveCharacterTextSplitter
 
+from src.config import get_judge
+
 load_dotenv()
 
 
@@ -23,7 +25,7 @@ chunks = load_chunks()
 sample = random.sample(chunks, min(15, len(chunks)))     # ~12 chunks -> keep the set small
 contexts = [[c] for c in sample]                          # each context = one chunk
 
-synthesizer = Synthesizer(model="gpt-4.1-mini")                # the generator/critic model -- pin it
+synthesizer = Synthesizer(model=get_judge())                # the generator/critic model -- pin it
 goldens = synthesizer.generate_goldens_from_contexts(
     contexts=contexts,
     include_expected_output=True,       # <-- THIS gives you the ideal_answer

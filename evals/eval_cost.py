@@ -26,10 +26,14 @@ AIMessage. Same prompt, same model, real retrieved context.
 # ============================================================
 # 1. IMPORTS & ENV
 # ============================================================
+import os
+
 from dotenv import load_dotenv
 
 from src.rag_pipeline import RagPipeline
 from src.generator import prompt, llm      # reuse the exact prompt + model
+
+from src.config import CHAT_MODEL
 
 load_dotenv()
 
@@ -48,12 +52,13 @@ QUESTIONS = [
 
 REPEATS = 3       # cost is stable, so fewer repeats needed than latency
 
-# --- Pricing: gpt-4o-mini, USD per 1M tokens (verified Aug 2026). ---
-# Prices change. Keep them here as constants, never buried in code, and re-check
-# the provider's pricing page before trusting a budget.
-PRICE_INPUT_PER_1M        = 0.15    # cache-miss input
-PRICE_CACHED_INPUT_PER_1M = 0.075   # cached (repeated prefix) input -- half price
-PRICE_OUTPUT_PER_1M       = 0.60    # output (4x input -- long answers dominate)
+# Pricing, USD per 1M tokens. Defaults below are Groq's openai/gpt-oss-120b;
+# override them in .env (PRICE_INPUT_PER_1M / PRICE_CACHED_INPUT_PER_1M /
+# PRICE_OUTPUT_PER_1M) whenever you switch model or provider. Prices change --
+# re-check the provider's pricing page before trusting a budget.
+PRICE_INPUT_PER_1M        = float(os.getenv("PRICE_INPUT_PER_1M", "0.15"))
+PRICE_CACHED_INPUT_PER_1M = float(os.getenv("PRICE_CACHED_INPUT_PER_1M", "0.15"))
+PRICE_OUTPUT_PER_1M       = float(os.getenv("PRICE_OUTPUT_PER_1M", "0.75"))
 
 # --- Business projection knobs (set these to YOUR reality) ---
 QUERIES_PER_DAY = 2000              # expected doubt-solver traffic
@@ -132,7 +137,7 @@ def report(rows):
     out_share = 100 * avg_cost_out / avg_cost if avg_cost else 0
 
     print("\n" + "=" * 70)
-    print(f"COST  (gpt-4o-mini @ ${PRICE_INPUT_PER_1M}/${PRICE_OUTPUT_PER_1M} per 1M in/out)")
+    print(f"COST  ({CHAT_MODEL} @ ${PRICE_INPUT_PER_1M}/${PRICE_OUTPUT_PER_1M} per 1M in/out)")
     print("=" * 70)
     print(f"samples                : {n}")
     print(f"avg input tokens       : {avg_in:8.0f}   ({avg_cached:.0f} cached)")

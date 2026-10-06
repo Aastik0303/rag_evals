@@ -5,7 +5,7 @@ These judge whether the RAG app behaves safely -- stays in its teaching-assistan
 role, protects hidden instructions and protected course content, doesn't emit
 PII, and doesn't produce toxic output. Unlike the operational evals, these ARE
 LLM-as-judge evals: each runs the live pipeline over a golden set and scores the
-output with a DeepEval metric (gpt-4o-mini judge).
+output with a DeepEval metric (judge model configured in .env).
 
 The one change from the three standalone files: each eval now exposes a run_*()
 that runs its DeepEval evaluation AND returns a flat dict of metrics
@@ -24,23 +24,43 @@ GATES: any drop in a safety pass rate should block, no tolerance band.
 # ============================================================
 # 1. IMPORTS & ENV
 # ============================================================
+import os
 import json
 from dotenv import load_dotenv
 
 from deepeval import evaluate
+from deepeval.evaluate.configs import AsyncConfig, CacheConfig
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 from deepeval.metrics import GEval, PIILeakageMetric, ToxicityMetric
 from deepeval.metrics.g_eval import Rubric
 
 from src.rag_pipeline import RagPipeline
 
+from src.config import get_judge
+
 load_dotenv()
+
+# DeepEval's on-disk test-case cache uses file locks that collide with its own
+# parallel async execution on Windows -- the lock fails, the cache object comes
+# back None and the run dies mid-suite. We don't reuse cached judgements here
+# anyway, so turn the cache off.
+NO_CACHE = CacheConfig(write_cache=False)
+
+# DeepEval fires 20 judge calls at once by default, which blows straight through
+# a free-tier token-per-minute budget (Groq allows 8k TPM, and one retrieval
+# judgement is ~3k tokens). Concurrency and the pause between tasks are env
+# knobs -- raise EVAL_MAX_CONCURRENT once you are on a paid tier.
+EVAL_ASYNC = AsyncConfig(
+    max_concurrent=int(os.getenv("EVAL_MAX_CONCURRENT", "1")),
+    throttle_value=float(os.getenv("EVAL_THROTTLE", "1")),
+)
 
 
 # ============================================================
 # 2. SHARED CONFIG
 # ============================================================
-JUDGE_MODEL = "gpt-4o-mini"
+# judge model name comes from JUDGE_MODEL in .env (was 'gpt-4o-mini' upstream)
+JUDGE_MODEL = get_judge()
 
 # Per-eval golden files and thresholds (each safety concern has its own set).
 SCOPE_GOLDEN_PATH    = "goldens/scope_goldens.json"
@@ -151,7 +171,8 @@ Success criteria: {g["success_criteria"]}
             )
         )
 
-    result = evaluate(test_cases=test_cases, metrics=[SCOPE_METRIC])
+    result = evaluate(cache_config=NO_CACHE,
+        async_config=EVAL_ASYNC, test_cases=test_cases, metrics=[SCOPE_METRIC])
     s = summarize_results(result)
     if verbose:
         print(f"[safety] scope: pass_rate={s['pass_rate']:.0f}%  avg_score={s['avg_score']:.2f}  n={s['n']}")
@@ -259,8 +280,10 @@ def run_leakage(rag, verbose=True):
             )
         )
 
-    protected_result = evaluate(test_cases=content_test_cases, metrics=[PROTECTED_LEAKAGE_METRIC])
-    pii_result       = evaluate(test_cases=pii_test_cases, metrics=[PII_LEAKAGE_METRIC])
+    protected_result = evaluate(cache_config=NO_CACHE,
+        async_config=EVAL_ASYNC, test_cases=content_test_cases, metrics=[PROTECTED_LEAKAGE_METRIC])
+    pii_result       = evaluate(cache_config=NO_CACHE,
+        async_config=EVAL_ASYNC, test_cases=pii_test_cases, metrics=[PII_LEAKAGE_METRIC])
 
     prot = summarize_results(protected_result)
     pii  = summarize_results(pii_result)
@@ -310,7 +333,8 @@ def run_toxicity(rag, verbose=True):
             )
         )
 
-    result = evaluate(test_cases=test_cases, metrics=[TOXICITY_METRIC])
+    result = evaluate(cache_config=NO_CACHE,
+        async_config=EVAL_ASYNC, test_cases=test_cases, metrics=[TOXICITY_METRIC])
     s = summarize_results(result)
     if verbose:
         # avg_score here is toxicity: lower is better

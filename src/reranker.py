@@ -1,3 +1,7 @@
+# import config FIRST -- it points the HuggingFace cache at the project folder
+# before sentence_transformers/huggingface_hub read those paths at import time
+import src.config  # noqa: F401
+
 from sentence_transformers import CrossEncoder
 from src.retriever import load_store
 

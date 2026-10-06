@@ -17,14 +17,16 @@ Both share the exact same prompt, model, and chain — the only difference is
 that one waits for the whole answer and the other emits it token-by-token.
 """
 
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from dotenv import load_dotenv
 
+from src.config import get_llm
+
 load_dotenv()
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+# provider + model come from .env (Groq by default) -- see src/config.py
+llm = get_llm()
 
 # faithfulness-first prompt: ground every claim in the context, abstain if unsure
 prompt = ChatPromptTemplate.from_template(
@@ -113,7 +115,7 @@ def generate_stream(query: str, context: list[str]):
             yield chunk
 
 
-# quick manual test: python src/generator.py
+# quick manual test: python -m src.generator
 if __name__ == "__main__":
     ctx = [
         "Online eval means evaluating your system on live production traffic "
