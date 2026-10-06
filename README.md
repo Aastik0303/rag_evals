@@ -1,4 +1,4 @@
-# rag-eval-deepeval — custom provider fork
+# rag_evals
 
 RAG pipeline over the LLM-evals course transcripts, with a DeepEval eval suite
 (retriever, generator, end-to-end triad, safety, toxicity, leakage, scope, plus
